@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "puppeteer": "^13.0.1",
+    "puppeteer-extra-plugin-click-and-wait": "^2.3.0",
+    "puppeteer-extra-plugin-stealth": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/puppeteer": "^5.4.4",
+    "eslint": "^7.32.0",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.25.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^5.2.0"
+  }
+}

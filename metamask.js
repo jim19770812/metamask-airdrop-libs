@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer')
 const lib = require('./libs.js')
 const Objects = require('./objects.js')
 const browser_wrapper=require('../metamask-airdrop-libs/wrappers')
+const waitForSelectorDisappear=require('../metamask-airdrop-libs/wrappers').waitForSelectorDisappear
 
 /**
  * MetaMask包装器
@@ -30,42 +31,62 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickLogin(password) {
+        const inputSelector='input.MuiInputBase-input.MuiInput-input'
         /**
-         * 获取界面上的输入框
+         * 如果页面上找不到输入框就刷新页面1次
          */
-        let ele=await this.page.querySelectorFirst('input.MuiInputBase-input.MuiInput-input', {
-            visible: true,
-            timeout: 10000
-        })
-        if (Objects.isNull(ele)){
-            return lib.Result.error("没有找到登录页面输入框！")
-        }
-        await ele.type(password)
-        // await this.page.waitForNavigation({
-        //     timeout: 2000
-        // })
-        await lib.sleep(1000)
-        //获取解锁按钮
-        let btn=await this.page.querySelectorFirst("button.button.btn--rounded.btn-default", {
-            visible: true,
-            timeout: 2000
-        });
-        if (Objects.isNull(btn)) {
-            console.error("没有找到metamask的登录按钮")
-            return lib.Result.error("没有找到metamask的登录按钮")
-        }
-        //await this.page.click('button.button.btn--rounded.btn-default')
-        await btn.click()
-        console.log("按下解锁按钮")
-        try {
-            await this.page.waitForSelector("div.selected-account__name", {
-                visible: true,
-                timeout: 6000,
+        await Promise.resolve().then(() => {
+            return new Promise(async (resolve, reject) => {
+                await this.page.waitForSelector(inputSelector, {timeout:3000, visible: false}).catch(reject).then(resolve)
             })
-        } catch (e) {
-            console.error(e)
-        }
-        return lib.Result.succ()
+        }).then(() => {
+            return new Promise(async (resolve, reject) => {
+                await this.page.reload()
+                resolve()
+            })
+        }).catch(e => {
+            console.error(`有错误发生1：${e}`)
+        })
+
+        /**
+         * 获取界面上的输入框，自动输入密码
+         */
+        await this.page.waitForSelector(inputSelector, { timeout: 5000, visible: true }).then(async (ele) => {
+            return new Promise(async (resolve, reject) => {
+                console.log(`填充密码 ${password}`)
+                await ele.type(password).then(resolve).catch(reject)
+            })
+        }).catch((e) => {
+            return Promise.reject(`没有找到元素${inputSelector}`)
+        }).then(async () => {
+            //document.querySelector('#loading__spinner')
+            /**
+             * 等待菊花消失，不然会出现点击了按钮结果无效的情况
+             */
+            return new Promise((resolve, reject) => {
+                const spinnerSelector='#loading__spinner'
+                this.page.querySelectorFirst(spinnerSelector, {timeout: 10000, hidden: true}).then(resolve).catch(reject)
+            })
+        }).then(async() => {
+            /**
+             * 点击解锁按钮
+             */
+            const buttonSelector='button.button.btn--rounded.btn-default'
+            let ret = await this.page.querySelectorFirst(buttonSelector, { visible: true, timeout: 30000 }).then(async (ele) => {
+                await lib.sleep(1000)
+                return new Promise(async (resolve, reject) => {
+                    await ele.click().then((element) => {
+                        console.log("按下解锁按钮")
+                        resolve()
+                    }).catch(Promise.reject) //点击按钮
+                })
+            }).catch((e) => {
+                return lib.Result.error(e)
+            }).then(() => {
+                return lib.Result.succ()
+            })
+            return ret
+        })
     }
 
     /**
@@ -73,16 +94,15 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickBtnPrimary() {
-        let ele=await this.page.querySelector("button.btn-primary", {
-            visible: true,
-            timeout: 10000
-        })
-        if (Objects.isNull(ele)) {
+        let ret = await this.page.querySelectorFirst("button.btn-primary", { visible: true, timeout: 10000 }).then(async (ele) => {
+            await ele.click() //点击按钮
+            return Promise.resolve()
+        }).catch((e) => {
             return lib.Result.error("未能在MetaMask界面上找到主要按钮")
-        }
-        await ele.click()
-        await lib.sleep(300)
-        return lib.Result.succ()
+        }).then(() => {
+            return lib.Result.succ()
+        })
+        return ret
     }
 
     /**
@@ -90,16 +110,15 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickBtnSecondary() {
-        let ele=await this.page.querySelector("button.btn-secondary", {
-            visible: true,
-            timeout: 10000
-        })
-        if (Objects.isNull(ele)) {
+        let ret = await this.page.querySelectorFirst("button.btn-secondary", { visible: true, timeout: 10000 }).then(async (ele) => {
+            await ele.click() //点击按钮
+            return Promise.resolve()
+        }).catch((e) => {
             return lib.Result.error("未能在MetaMask界面上找到次要按钮")
-        }
-        await ele.click()
-        await lib.sleep(300)
-        return lib.Result.succ()
+        }).then(() => {
+            return lib.Result.succ()
+        })
+        return ret
     }
 
     /**
@@ -107,11 +126,14 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async getCurrentAccountName() {
-        let ele = await this.page.waitForSelector('div.selected-account__name')
-        if (Objects.isNull(ele)) {
-            return lib.Result.error('没有找到账户名元素')
-        }
-        let ret = lib.Result.succ(await (await ele.getProperty('textContent')).jsonValue())
+        let ret=await this.page.waitForSelector('div.selected-account__name', { timeout: 1000, visible: true }).then(async (ele) => {
+            let val = await (await ele.getProperty('textContent')).jsonValue()
+            return Promise.resolve(val)
+        }).catch((e) => {
+            return lib.Result.error(`没有找到账户名元素 ${e}`)
+        }).then((val) => {
+            return lib.Result.succ(val)
+        })
         return ret
     }
 
@@ -120,12 +142,15 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async getCurrentAccountEllipsis() {
-        let ele = await this.page.waitForSelector('.selected-account__address')
-        if (Objects.isNull(ele)) {
-            return lib.Result.error("未找到当前账户省略地址")
-        }
-        let ret = await (await ele.getProperty('textContent')).jsonValue()
-        return lib.Result.succ(ret)
+        let ret=await this.page.waitForSelector('.selected-account__address', { timeout: 1000, visible: true }).then(async (ele) => {
+            let val = await (await ele.getProperty('textContent')).jsonValue()
+            return Promise.resolve(val)
+        }).catch((e) => {
+            return lib.Result.error(`未找到当前账户省略地址 ${e}`)
+        }).then((val) => {
+            return lib.Result.succ(val)
+        })
+        return ret
     }
 
     /**
@@ -133,18 +158,19 @@ class MetaMaskWrapper{
      * @returns {Promise<number>}
      */
     async getBalanceValue() {
-        let ele = await this.page.waitForSelector('.currency-display-component__text')
-        if (Objects.nonNull(ele)) {
+        let ret = await this.page.waitForSelector('.currency-display-component__text').then(async (ele) => {
             let ret = await (await ele.getProperty('textContent')).jsonValue()
-            return parseFloat(ret)
-        }
-        return -1
+            return parseFloat(new String(ret).toString())
+        }).catch(e => {
+            return -1
+        })
+        return ret
     }
 
     /**
-     * 
-     * @param {设置超时时间} timeout 
-     * @return {void}
+     * 设置超时时间
+     * @param {number} timeout 
+     * @return {Promise<Void>}
      */
     async setDefaultNavigationTimeout(timeout) {
         await this.page.setDefaultNavigationTimeout(timeout)
@@ -181,7 +207,7 @@ class MetaMaskWrapper{
         /**
          * 找出下拉的所有账户元素，找出所有非当前账户的所有元素并加入到一个新的节点列表里
          */
-        let nlist = await this.page.$$('div.account-menu__account-info')
+        let nlist = await this.page.querySelectorAll('div.account-menu__account-info')
         if (Objects.isNull(nlist) || nlist.length == 0) {
             return lib.Result.error('没有在我的账户的下拉框里找到账户')
         }
@@ -290,7 +316,7 @@ class MetaMaskWrapper{
             return lib.Result.error('没有找到地址输入框')
         }
         await el.focus()
-        await el.type(new String(addr));
+        await el.type(new String(addr).toString());
         //await this.page.type('input.ens-input__wrapper__input', addr)
         return lib.Result.succ()
     }
@@ -310,7 +336,7 @@ class MetaMaskWrapper{
         }
         await el.focus()
         //await el.click()
-        await el.type(new String(amount))
+        await el.type(new String(amount).toString())
         await this.page.waitForTimeout(300)
         return lib.Result.succ()
     }
@@ -348,7 +374,7 @@ class MetaMaskWrapper{
             return lib.Result.error('gas limit 没有找到')
         }
         await el.focus()
-        await el.type(new String(val))
+        await el.type(new String(val).toString())
         await this.page.waitForTimeout(300)
         return lib.Result.succ()
     }
@@ -436,7 +462,9 @@ class MetamaskPopuper{
     constructor(browser) {
         this.browser=browser
         this.primaryButtonQuerySelector = null
-        this.timeout=5000
+        this.timeout = 5000
+        this.asyncBeforeOpenFunc = null
+        this.asyncAfterOpenFunc=null
     }
 
     /**
@@ -451,7 +479,7 @@ class MetamaskPopuper{
      * 设置metamask的主要按钮选择器
      * @param {*} selectorType 选择类型
      * @param {*} selector 选择器表达式
-     * @returns 
+     * @returns {MetamaskPopuper}
      */
     setPrimaryButtonSelector(selectorType, selector) {
         this.primaryButtonQuerySelector = new browser_wrapper.QuerySelector(selectorType, selector)
@@ -459,8 +487,44 @@ class MetamaskPopuper{
     }
 
     /**
+     * 获取异步的弹出窗口前触发的函数
+     * @returns {()=>{}}
+     */
+    getAsyncBeforeOpenFunc() {
+        return this.asyncBeforeOpenFunc
+    }
+
+    /**
+     * 设置异步的弹出窗口前触发的函数
+     * @param {()=>{}} func 
+     * @returns {MetamaskPopuper}
+     */
+    setAsyncBeforeOpenFunc(func) {
+        this.asyncBeforeOpenFunc = func
+        return this
+    }
+    
+    /**
+     * 获取异步的弹出窗口后触发的函数
+     * @returns {(pop)={}}
+     */
+    getAsyncAfterOpenFunc() {
+        return this.asyncAfterOpenFunc
+    }
+    
+    /**
+     * 设置异步的弹出窗口后触发的函数
+     * @param {(pop)=>{}} func 
+     * @returns {MetamaskPopuper}
+     */
+    setAsyncAfterOpenFunc(func) {
+        this.asyncAfterOpenFunc = func
+        return this
+    }
+    
+    /**
      * 设置超时时间
-     * @param {string} timeout 
+     * @param {number} timeout 
      * @returns {MetamaskPopuper}
      */
     setTimeout(timeout) {
@@ -468,20 +532,68 @@ class MetamaskPopuper{
         return this
     }
 
+    // /**
+    //  * 弹出 targetcreated 模式对话框
+    //  * @returns {Promise<lib.Result>}
+    //  */
+    // async popupTargetcreated() {
+    //     const popupPromiser = new Promise(resolve => this.browser.once('targetcreated', target => {
+    //         let p2 = target.page()
+    //         // let text = p2.content()
+    //         // if (text.trim() === "") {//防止弹出对话框不显示内容，这里强制刷新一下
+    //         //     p2.reload()
+    //         // }
+    //         resolve(p2)
+    //     }))
+    //     if (Objects.nonNull(this.asyncBeforeOpenFunc)) {
+    //         await this.asyncBeforeOpenFunc()
+    //         await lib.sleep(1000)
+    //     }
+    //     //await ele.click() //点击菜单项，弹出metamask批准对话框
+    //     let pop = await popupPromiser
+    //     //document.querySelector('#loading__spinner')
+    //     await waitForSelectorDisappear(pop, '#loading__spinner', 10, 1000, async (pg) => {
+    //         await pg.reload()
+    //         await lib.sleep(1000)
+    //     });
+
+    //     let btn = null //等待弹出对话框上批准按钮消失
+    //     if (this.primaryButtonQuerySelector.isCSSSelector()) {
+    //         btn=await pop.waitForSelector(this.primaryButtonQuerySelector.getSelector(), {timeout: this.timeout,visible:true})
+    //     } else if (this.primaryButtonQuerySelector.isXPATHSelector()) {
+    //         btn=await pop.$x(this.primaryButtonQuerySelector.getSelector())
+    //     } else {
+    //         throw new Error('未传入有效的QuerySelector类型，必须是css/xpath之一')
+    //     }
+
+    //     if (Objects.nonNull(this.asyncAfterOpenFunc)) {
+    //         await this.asyncAfterOpenFunc(pop)
+    //     }
+
+    //     await btn.click()//点击弹出对话框上的批准按钮
+    //     console.log(`点击了弹出对话框上按钮 ${JSON.stringify(this.primaryButtonQuerySelector)}`)
+    //     return lib.Result.succ()
+    // }
+
     /**
      * 弹出 targetcreated 模式对话框
-     * @param {(popPage)=>{}} asyncFunc
      * @returns {Promise<lib.Result>}
      */
-    async popupTargetcreated(asyncFunc) {
+    async popupTargetcreated() {
         const popupPromiser = new Promise(resolve => this.browser.once('targetcreated', target => {
             let p2 = target.page()
-            console.log("p2.class", p2.constructor.name)
             resolve(p2)
         }))
-        //await ele.click() //点击菜单项，弹出metamask批准对话框
+        if (Objects.nonNull(this.asyncBeforeOpenFunc)) {
+            await this.asyncBeforeOpenFunc() //点击菜单项，弹出metamask批准对话框
+            await lib.sleep(1000)
+        }
         let pop = await popupPromiser
-        //let btn=await pop.waitForSelector('button.btn-primary', {
+        const spinnerSelector='#loading__spinner'
+        await waitForSelectorDisappear(pop, spinnerSelector, 10, 1000, async (pg) => {
+            await pg.reload()
+            await lib.sleep(1000)
+        });
 
         let btn = null //等待弹出对话框上批准按钮消失
         if (this.primaryButtonQuerySelector.isCSSSelector()) {
@@ -492,8 +604,8 @@ class MetamaskPopuper{
             throw new Error('未传入有效的QuerySelector类型，必须是css/xpath之一')
         }
 
-        if (Objects.nonNull(asyncFunc)) {
-            await asyncFunc(pop)
+        if (Objects.nonNull(this.asyncAfterOpenFunc)) {
+            await this.asyncAfterOpenFunc(pop)
         }
 
         await btn.click()//点击弹出对话框上的批准按钮

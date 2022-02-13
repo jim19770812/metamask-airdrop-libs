@@ -43,6 +43,7 @@ class BrowserWrapper{
      * @returns {Promise<puppeteer.Browser>}
      */
     async createBrowser() {
+        // @ts-ignore
         puppeteerExtra.use(Stealth())
         const height = 890
         const width=1100
@@ -76,11 +77,13 @@ class BrowserWrapper{
             args.push(`--proxy-server=${this.config.proxy_server}`)
         }
         //Puppeteer.launch.AUTOMATION_ARGS.remove("--enable-automation")
+        // @ts-ignore
         this.browser = await puppeteerExtra.launch({
             ignoreDefaultArgs:['--enable-automation'],
             headless: this.config.headless,
             //logLevel: false,
             devtools: false,
+            slowMo: true,
             dumpio: true,
             //autoClose: false,
             ignoreHTTPSErrors:true,
@@ -130,6 +133,7 @@ class BrowserWrapper{
      * 获取页面
      */
     async getPages() {
+        // @ts-ignore
         // @ts-ignore
         let list = await this.browser.pages();
         let result=[]
@@ -229,7 +233,7 @@ class PageWrapper{
 
     /**
      * 设置是否允许js
-     * @param {boolean}} enabled 
+     * @param {boolean} enabled 
      */
     async setJavaScriptEnabled(enabled) {
         await this.page.setJavaScriptEnabled(enabled)
@@ -240,6 +244,7 @@ class PageWrapper{
      * @returns {Promise<browser_wrapper.BrowserWrapper>}
      */
     getBrowser() {
+        // @ts-ignore
         return BrowserWrapper.ofBrowser(this.page.browser())
     }
 
@@ -323,6 +328,14 @@ class PageWrapper{
     }
 
     /**
+     * 页面内容是空白
+     */
+    async isEmpty() {
+        let ret = await this.page.content()
+        return ret===""
+    }
+
+    /**
      * 获取页面title
      * @returns {Promise<String>}
      */
@@ -344,11 +357,12 @@ class PageWrapper{
     /**
      * 等待导航
      * @param {object} option
-     * @returns void
+     * @returns {Promise<Void>}
      */
     async waitForNavigation(option) {
+        
         // @ts-ignore
-        await this.page.waitForNavigation(option | {})
+        return await this.page.waitForNavigation(option | {})
     }
     /**
      * 页面等待
@@ -394,7 +408,7 @@ class PageWrapper{
     async reload(options) {
         if (Objects.isNull(options)) {
             options = {
-                timeout: 3000,
+                timeout: 300000,
                 waitUntil: 'domcontentloaded'
             }
         }
@@ -403,11 +417,12 @@ class PageWrapper{
 
     /**
      * 
-     * @param {stirng} eventName 
-     * @param {function(x)} handler 
+     * @param {string} eventName 
+     * @param {(x)=>{}} handler 
      * @returns 
      */
     async once(eventName, handler) {
+        // @ts-ignore
         const ret = await this.page.once(eventName, handler);
         return ret
     }
@@ -415,10 +430,11 @@ class PageWrapper{
     /**
      * 
      * @param {puppeteer.PageEventObject} eventName 
-     * @param {function(x)} handler 
+     * @param {(x)=>{}} handler 
      * @returns 
      */
     async on(eventName, handler) {
+        // @ts-ignore
         return await this.page.on(eventName, handler)
     }
 
@@ -465,17 +481,18 @@ class ElementHandleWrapper{
 
     /**
      * 获取内部html
-     * @returns {string}
+     * @returns {Promise<string>}
      */
     async innerHtml() {
         let ret = await(await (await this.element.getProperty('innerHtml')).jsonValue())
+        // @ts-ignore
         return ret
     }
 
     /**
      * 获取内部html
      * @param {puppeteer.ElementHandle} elementHandle 
-     * @returns {string}
+     * @returns {Promise<string>}
      */
     static async innerHtml(elementHandle) {
         let ret = await (await Objects.requireNonNull(elementHandle).getProperty('innerHtml').jsonValue())
@@ -569,15 +586,33 @@ class ElementHandleWrapper{
         return this.querySelectorFirst(selector)
     }
 
+    // /**
+    //  * 点击某选择器
+    //  * @returns {Promise<ElementHandleWrapper>}
+    //  */
+    // async click() {
+    //     await this.element.click()
+    //     return this
+    // }
+
     /**
-     * 点击某选择器
+     * 点击元素，传入的page会自动waitForNagiation
+     * @param {browser_wrapper.PageWrapper}} page 
+     * @param {object} navOptions
+     * @param {object} clickOptions
      * @returns {Promise<ElementHandleWrapper>}
      */
-    async click() {
-        await this.element.click()
+    async click(page, navOptions, clickOptions) {
+        if (typeof (navOptions) === "undefined") {
+            await this.element.click()
+            return this
+        }
+        await Promise.all([
+            page.waitForNavigation(navOptions),
+            this.element.click(clickOptions)
+        ])
         return this
     }
-
     /**
      * 根据选择器输入字符
      * @param {string} chars 
@@ -658,13 +693,13 @@ class QuerySelector{
 * 在节点列表里查找指定的eth地址索引
 * @param {puppeteer.ElementHandle[]} nodeList
 * @param {string} text
-* @return {number}
+* @return {Promise<number>}
 */
 async function indexOf(nodeList, text){
     for (let index = 0; index <= nodeList.length - 1; index++){
         let ele = new ElementHandleWrapper(nodeList[index])
         let temp=await ele.textContent()
-        console.log("textContent", temp)
+        //console.log("textContent", temp)
         //const temp=await await(await ele.getProperty('textContent')).jsonValue()
         let s1 = new String(temp).toLowerCase()
         let s2=new String(text).toLowerCase()
@@ -675,10 +710,44 @@ async function indexOf(nodeList, text){
     return -1
 }
 
+/**
+ * 
+ * 等待某个元素消失，如果不存在就触发事件，然后等待并继续检查，直到元素消失或者达到最大循环次数
+ * @param {puppeteer.Page} page 
+ * @param {string} selector 选择器
+ * @param {number} loop 循环次数
+ * @param {number} loopInreval 循环的间隔毫秒
+ * @param {(pg)=>{}} asyncFunc 异步函数
+ * @returns {Promise<Void>}
+ */
+async function waitForSelectorDisappear(page, selector, loop, loopInreval, asyncFunc) {
+    let ele = null
+    while (ele === null && loop > 0) {
+        try {
+            ele = await page.waitForSelector(selector, {
+                timeout: 3000,
+                visible:false
+            })
+            console.log(ele)
+        } catch (e) {
+            console.error(e)
+        }
+        if (Objects.nonNull(ele)) {
+            await asyncFunc(page)
+            await lib.sleep(loopInreval)
+        } else {
+            return ele
+        }
+        loop--
+    }
+    return null
+}
+
 module.exports = {
     BrowserWrapper,
     PageWrapper,
     ElementHandleWrapper,
     QuerySelector,
-    indexOf
+    indexOf,
+    waitForSelectorDisappear
 }

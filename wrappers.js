@@ -50,7 +50,7 @@ class BrowserWrapper{
         let args = [
                 `--window-size=${width},${height}`,
                 `--load-extension=${this.config.extension}`,
-                `--disable-extensions-except=${this.config.extension}`,
+                // `--load-extension=${this.config.extension1}`,
                 `--user-data-dir=${this.config.user_dir}`,
                 '--lang=zh-CN',
                 '--lang=zh_CN.UTF-8',
@@ -63,14 +63,14 @@ class BrowserWrapper{
                 '--disable-xss-auditor', //关闭xss auditor
                 '--disable-webgl', //禁用webgl
                 '--disable-web-security', //关闭web安全
-                //'--disable-popup-blocking',
                 '--allow-running-insecure-content', //允许不安全内容
-                //'–-window-size = 1366,850'  // window-size=1920x3000
                 '--ignore-certificate-errors',  //忽略证书错误
                 '--disable-dev-shm-usage', //禁止使用默认的/dev/shm共享内存（只有64M不够用）
                 '--shm-size=1gb', //设置足够额共享内存大小
                 '--process-per-tab', //每个标签使用单独的进程，开启后每个请求会开一个独立的浏览器窗口
                 '--first-run', //重置到首次运行
+                //'--disable-popup-blocking',
+                //'–-window-size = 1366,850'  // window-size=1920x3000
                 //'--incognito', //隐身模式启动，开启隐身模式会打开较多新窗口
         ]
         if (Objects.nonNull(this.config.proxy_server) && this.config.proxy_server !== "") { //设置代理服务器
@@ -81,11 +81,9 @@ class BrowserWrapper{
         this.browser = await puppeteerExtra.launch({
             ignoreDefaultArgs:['--enable-automation'],
             headless: this.config.headless,
-            //logLevel: false,
             devtools: false,
             slowMo: true,
             dumpio: true,
-            //autoClose: false,
             ignoreHTTPSErrors:true,
             handleSIGTERM:true,
             handleSIGINT:true,
@@ -96,6 +94,8 @@ class BrowserWrapper{
                 height: height,
             },
             args: args
+            //logLevel: false,
+            //autoClose: false,
         })
         this.config=null
         return this.browser
@@ -613,6 +613,7 @@ class ElementHandleWrapper{
         ])
         return this
     }
+
     /**
      * 根据选择器输入字符
      * @param {string} chars 
@@ -722,6 +723,10 @@ async function indexOf(nodeList, text){
  */
 async function waitForSelectorDisappear(page, selector, loop, loopInreval, asyncFunc) {
     let ele = null
+    if (Objects.isNull(page)) {
+        console.error('执行waitForSelectorDisappear时发现传入的page对象是null')
+        return null
+    }
     while (ele === null && loop > 0) {
         try {
             ele = await page.waitForSelector(selector, {

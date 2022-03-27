@@ -37,7 +37,7 @@ class MetaMaskWrapper{
          */
         await Promise.resolve().then(() => {
             return new Promise(async (resolve, reject) => {
-                await this.page.waitForSelector(inputSelector, {timeout:3000, visible: false}).catch(reject).then(resolve)
+                await this.page.waitForSelector(inputSelector, {timeout:3000, visible: false}).catch(e=>reject(e)).then(resolve)
             })
         }).then(() => {
             return new Promise(async (resolve, reject) => {
@@ -54,7 +54,7 @@ class MetaMaskWrapper{
         await this.page.waitForSelector(inputSelector, { timeout: 5000, visible: true }).then(async (ele) => {
             return new Promise(async (resolve, reject) => {
                 console.log(`填充密码 ${password}`)
-                await ele.type(password).then(resolve).catch(reject)
+                await ele.type(password).then(resolve).catch(e=>reject(e))
             })
         }).catch((e) => {
             return Promise.reject(`没有找到元素${inputSelector}`)
@@ -65,7 +65,7 @@ class MetaMaskWrapper{
              */
             return new Promise((resolve, reject) => {
                 const spinnerSelector='#loading__spinner'
-                this.page.querySelectorFirst(spinnerSelector, {timeout: 10000, hidden: true}).then(resolve).catch(reject)
+                this.page.querySelectorFirst(spinnerSelector, {timeout: 10000, hidden: true}).then(resolve).catch(e=>reject(e))
             })
         }).then(async() => {
             /**
@@ -78,7 +78,7 @@ class MetaMaskWrapper{
                     await ele.click().then((element) => {
                         console.log("按下解锁按钮")
                         resolve()
-                    }).catch(Promise.reject) //点击按钮
+                    }).catch(e=>Promise.reject(e)) //点击按钮
                 })
             }).catch((e) => {
                 return lib.Result.error(e)
@@ -94,15 +94,14 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickBtnPrimary() {
-        let ret = await this.page.querySelectorFirst("button.btn-primary", { visible: true, timeout: 10000 }).then(async (ele) => {
-            await ele.click() //点击按钮
-            return Promise.resolve()
+        let result=await this.page.reload().then(async (resolve, reject) => {
+            let btn = await this.page.querySelectorFirst("button.btn-primary", { visible: true, timeout: 9000 })
+            await btn.click()//点击按钮
+            return lib.Result.succ()
         }).catch((e) => {
             return lib.Result.error("未能在MetaMask界面上找到主要按钮")
-        }).then(() => {
-            return lib.Result.succ()
         })
-        return ret
+        return result
     }
 
     /**
@@ -110,15 +109,14 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickBtnSecondary() {
-        let ret = await this.page.querySelectorFirst("button.btn-secondary", { visible: true, timeout: 10000 }).then(async (ele) => {
-            await ele.click() //点击按钮
-            return Promise.resolve()
+        let result=await this.page.reload().then(async (resolve, reject) => {
+            let btn = await this.page.querySelectorFirst("div.selected-account__name", { visible: true, timeout: 9000 })
+            await btn.click()//点击按钮
+            return lib.Result.succ()
         }).catch((e) => {
             return lib.Result.error("未能在MetaMask界面上找到次要按钮")
-        }).then(() => {
-            return lib.Result.succ()
         })
-        return ret
+        return result
     }
 
     /**

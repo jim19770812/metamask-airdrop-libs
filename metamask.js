@@ -31,22 +31,20 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickLogin(password) {
+        for (let i = 1; i <= 3; i++){
+            if (await !this.page.isEmpty()) 
+                break;
+            await this.page.reload()
+        }
+
         const inputSelector='input.MuiInputBase-input.MuiInput-input'
         /**
          * 如果页面上找不到输入框就刷新页面1次
          */
-        await Promise.resolve().then(() => {
-            return new Promise(async (resolve, reject) => {
-                await this.page.waitForSelector(inputSelector, {timeout:3000, visible: false}).catch(e=>reject(e)).then(resolve)
-            })
-        }).then(() => {
-            return new Promise(async (resolve, reject) => {
-                await this.page.reload()
-                resolve()
-            })
-        }).catch(e => {
-            console.error(`有错误发生1：${e}`)
-        })
+        let ele = await this.page.waitForSelector(inputSelector, { timeout: 3000, visible: false })
+        if (Objects.isNull(ele)) {
+            console.error(`执行clickLogin时有错误发生：${e}`)
+        }
 
         /**
          * 获取界面上的输入框，自动输入密码

@@ -328,11 +328,11 @@ class PageWrapper{
     }
 
     /**
-     * 页面内容是空白
+     * 页面内容是否是空白页
      */
     async isEmpty() {
         let ret = await this.page.content()
-        return ret===""
+        return ret.indexOf("<body></body>")>=0 || ret===""
     }
 
     /**

@@ -92,14 +92,22 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickBtnPrimary() {
-        let result=await this.page.reload().then(async (resolve, reject) => {
-            let btn = await this.page.querySelectorFirst("button.btn-primary", { visible: true, timeout: 9000 })
-            await btn.click()//点击按钮
-            return lib.Result.succ()
-        }).catch((e) => {
+        await this.page.reload()
+        let btn = await this.page.querySelectorFirst("button.btn-primary", { visible: true, timeout: 9000 })
+        if (Objects.isNull(btn)) {
             return lib.Result.error("未能在MetaMask界面上找到主要按钮")
-        })
-        return result
+        }
+        await btn.click()//点击按钮
+        return lib.Result.succ()
+
+        // let result=await this.page.reload().then(async (resolve, reject) => {
+        //     let btn = await this.page.querySelectorFirst("button.btn-primary", { visible: true, timeout: 9000 })
+        //     await btn.click()//点击按钮
+        //     return lib.Result.succ()
+        // }).catch((e) => {
+        //     return lib.Result.error("未能在MetaMask界面上找到主要按钮")
+        // })
+        // return result
     }
 
     /**
@@ -107,14 +115,13 @@ class MetaMaskWrapper{
      * @returns {Promise<lib.Result>}
      */
     async clickBtnSecondary() {
-        let result=await this.page.reload().then(async (resolve, reject) => {
-            let btn = await this.page.querySelectorFirst("div.selected-account__name", { visible: true, timeout: 9000 })
-            await btn.click()//点击按钮
-            return lib.Result.succ()
-        }).catch((e) => {
-            return lib.Result.error("未能在MetaMask界面上找到次要按钮")
-        })
-        return result
+        await this.page.reload()
+        let btn = await this.page.querySelectorFirst("div.selected-account__name", { visible: true, timeout: 9000 })
+        if (Objects.isNull(btn)) {
+            return lib.Result.error(`没有找到账户名元素`)
+        }
+        await btn.click()//点击按钮
+        return lib.Result.succ()
     }
 
     /**
@@ -258,7 +265,6 @@ class MetaMaskWrapper{
                 await o.click() //点击最适合的账户
                 return lib.Result.succ()
             }
-
         }
         return lib.Result.succ()
     }

@@ -152,24 +152,26 @@ class BrowserWrapper{
      * @returns {Promise<puppeteer.Page>}
      */
     async findPage(title, loopCount) {
-        let loop = loopCount
-        while (loop > 0) {
-            let pageList = await this.browser.pages()
-            try {
-                for (let i = 0; i <= pageList.length - 1; i++) {
-                    let ret = pageList[i]
-                    let temp = await ret.title()
-                    if (temp.indexOf(title) >= 0) {
-                        return ret
-                    }
-                }
-            } catch (e) {
-                console.error(e)
-            }
-            loop--
-            await lib.sleep(200) //等待100毫秒
-        }
-        return null
+        let ret = findPage(this.browser, title, loopCount)
+        return ret
+        // let loop = loopCount
+        // while (loop > 0) {
+        //     let pageList = await this.browser.pages()
+        //     try {
+        //         for (let i = 0; i <= pageList.length - 1; i++) {
+        //             let ret = pageList[i]
+        //             let temp = await ret.title()
+        //             if (temp.indexOf(title) >= 0) {
+        //                 return ret
+        //             }
+        //         }
+        //     } catch (e) {
+        //         console.error(e)
+        //     }
+        //     loop--
+        //     await lib.sleep(200) //等待100毫秒
+        // }
+        // return null
     }
 
     /**
@@ -335,6 +337,14 @@ class PageWrapper{
         return ret.indexOf("<body></body>")>=0 || ret===""
     }
 
+    /**
+     * 关闭页面
+     * @param {object} option 
+     * @returns {Promise<Void>}
+     */
+    async close(option) {
+        return await this.page.close()
+    }
     /**
      * 获取页面title
      * @returns {Promise<String>}
@@ -712,6 +722,34 @@ async function indexOf(nodeList, text){
 }
 
 /**
+ * 等待页面打开制定的数量就结束
+ * @param {puppeteer.Browser} browser
+ * @param {string} title 
+ * @param {number} loopCount 
+ * @returns {Promise<puppeteer.Page>}
+ */
+async function findPage(browser, title, loopCount) {
+    let loop = loopCount
+    while (loop > 0) {
+        let pageList = await browser.pages()
+        try {
+            for (let i = 0; i <= pageList.length - 1; i++) {
+                let ret = pageList[i]
+                let temp = await ret.title()
+                if (temp.indexOf(title) >= 0) {
+                    return ret
+                }
+            }
+        } catch (e) {
+            console.error(e)
+        }
+        loop--
+        await lib.sleep(200) //等待100毫秒
+    }
+    return null
+}
+
+/**
  * 
  * 等待某个元素消失，如果不存在就触发事件，然后等待并继续检查，直到元素消失或者达到最大循环次数
  * @param {puppeteer.Page} page 
@@ -753,6 +791,7 @@ module.exports = {
     PageWrapper,
     ElementHandleWrapper,
     QuerySelector,
+    findPage,
     indexOf,
     waitForSelectorDisappear
 }
